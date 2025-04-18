@@ -162,12 +162,17 @@ export default function NewReportPage() {
         status: backendStatus // Using the mapped status value
       };
       
+      console.log('Submitting report data:', reportData);
+      
       // Submit to API
       const response = await reportsService.createReport(reportData);
+      console.log('API create report response:', response);
       
       if (!response.success) {
         throw new Error(response.message || "حدث خطأ أثناء إنشاء التقرير");
       }
+      
+      console.log('Successfully created report, response data:', response.data);
       
       // Success notification
       notifications.success(
@@ -191,6 +196,16 @@ export default function NewReportPage() {
       
     } catch (error) {
       console.error("Error submitting report:", error);
+      
+      // Provide more detailed logging for debugging
+      if (error instanceof Error) {
+        console.error('Error name:', error.name);
+        console.error('Error message:', error.message);
+        console.error('Error stack:', error.stack);
+      } else {
+        console.error('Unknown error type:', typeof error);
+        console.error('Error details:', error);
+      }
       
       notifications.error(
         error instanceof Error ? error.message : "حدث خطأ أثناء حفظ التقرير. يرجى المحاولة مرة أخرى"
@@ -262,7 +277,7 @@ export default function NewReportPage() {
                 <button
                   type="button"
                   onClick={() => setFormData({...formData, reportNumber: generateReportNumber()})}
-                  className="px-3 py-2 bg-secondary text-secondary-foreground border border-r rounded-r-md border-r-0 hover:bg-secondary/90"
+                  className="px-3 py-2 bg-secondary text-secondary-foreground border border-r rounded-r-md hover:bg-secondary/90"
                   title="توليد رقم تقرير تلقائي"
                 >
                   توليد

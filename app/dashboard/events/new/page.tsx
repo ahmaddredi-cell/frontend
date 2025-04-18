@@ -82,10 +82,11 @@ export default function NewEventPage() {
     eventType: "security_incident",
     description: "",
     severity: "medium",
-    status: "pending",
+    status: "ongoing",
     palestinianIntervention: "",
     israeliResponse: "",
     results: "",
+    reportId: "", // Add this field since it's required in the interface
     casualties: {
       killed: 0,
       injured: 0,
@@ -113,13 +114,78 @@ export default function NewEventPage() {
           notifications.error('فشل في تحميل بيانات المحافظات');
         }
         
-        // Fetch active reports
-        const reportsResponse = await reportsService.getReports({ status: 'active' });
-        if (reportsResponse.success && reportsResponse.data?.reports) {
-          setReports(reportsResponse.data.reports.map((report: any) => ({
-            id: report._id,
-            reportNumber: report.reportNumber
-          })));
+        // Fetch reports that are not archived
+        const reportsResponse = await reportsService.getReports({
+          status: 'draft,complete,approved' // Exclude archived reports
+        });
+        
+        console.log("Full reports response:", reportsResponse);
+        
+        // Additional debug logging to examine the structure in more detail
+        if (reportsResponse.data) {
+          console.log("Reports data structure check:", {
+            isArray: Array.isArray(reportsResponse.data),
+            hasReportsProperty: reportsResponse.data && typeof reportsResponse.data === 'object' && 'reports' in reportsResponse.data,
+            hasDataProperty: reportsResponse.data && typeof reportsResponse.data === 'object' && 'data' in reportsResponse.data,
+            keys: reportsResponse.data && typeof reportsResponse.data === 'object' ? Object.keys(reportsResponse.data) : []
+          });
+        }
+        
+        if (reportsResponse.success) {
+          try {
+            // Define report type based on backend model structure
+            interface ReportItem {
+              _id?: string;
+              id?: string;
+              reportNumber: string;
+              reportDate: string;
+              reportType: string;
+              status: string;
+            }
+            
+            // The backend response structure varies - fix handling to correctly process the response
+            let reportsList: ReportItem[] = [];
+            
+            // In the dailyReport.controller.js, reports are returned in the 'data' property
+            // The API call response will be in format { success: true, data: reports }
+            const responseData = reportsResponse.data as any;
+            
+            console.log("Response data type:", typeof responseData);
+            console.log("Full response structure:", JSON.stringify(reportsResponse, null, 2));
+            
+            if (responseData) {
+              // The dailyReport.controller.js returns data in the 'data' property
+              if (responseData.data && Array.isArray(responseData.data)) {
+                reportsList = responseData.data;
+                console.log("Found reports in responseData.data:", reportsList.length);
+              } 
+              // For compatibility with potential array returns
+              else if (Array.isArray(responseData)) {
+                reportsList = responseData;
+                console.log("Found reports in direct array:", reportsList.length);
+              }
+              // For other potential formats
+              else if (responseData.reports && Array.isArray(responseData.reports)) {
+                reportsList = responseData.reports;
+                console.log("Found reports in responseData.reports:", reportsList.length);
+              }
+            }
+            
+            console.log("Processed reports data:", reportsList);
+            
+            if (reportsList && reportsList.length > 0) {
+              setReports(reportsList.map((report: any) => ({
+                id: report._id || report.id, // Handle both _id and id formats
+                reportNumber: report.reportNumber || `تقرير #${report._id?.substring(0,5) || ""}`
+              })));
+              console.log("Reports set successfully:", reportsList.length, "reports");
+            } else {
+              console.warn("No reports found in the response data");
+            }
+          } catch (error) {
+            console.error("Error processing reports data:", error);
+            notifications.error("حدث خطأ في معالجة بيانات التقارير");
+          }
         } else {
           console.error('Failed to fetch reports:', reportsResponse.message);
           notifications.error('فشل في تحميل بيانات التقارير');
@@ -235,10 +301,28 @@ export default function NewEventPage() {
     setIsLoading(true);
     
     try {
+      // Validate reportId is present since it's required
+      if (!form.reportId) {
+        notifications.error("الرجاء اختيار التقرير المرتبط");
+        setIsLoading(false);
+        return;
+      }
+
+      // Format the date and time properly for API submission
+      // Fix for "Invalid Date" error - Create a properly formatted ISO string
+      const eventDateTime = new Date(`${form.eventDate}T${form.eventTime}`);
+      
+      if (isNaN(eventDateTime.getTime())) {
+        notifications.error("تاريخ أو وقت الحدث غير صالح");
+        setIsLoading(false);
+        return;
+      }
+      
       // Format form data for API
-      const eventData: CreateEventData = {
+      const eventData: any = {
         eventDate: form.eventDate,
-        eventTime: form.eventTime,
+        // Format time in ISO format to prevent "Invalid Date" error
+        eventTime: eventDateTime.toISOString(),
         governorate: form.governorate,
         region: form.region,
         eventType: form.eventType,
@@ -246,12 +330,17 @@ export default function NewEventPage() {
         palestinianIntervention: form.palestinianIntervention,
         israeliResponse: form.israeliResponse,
         results: form.results,
-        status: form.status,
+        status: form.status, // Status should already be valid from the select options
         severity: form.severity,
-        reportId: form.reportId
+        reportId: form.reportId,
+        casualties: form.casualties,
+        involvedParties: form.involvedParties
       };
       
-      // Submit event data
+      // Add debug logging to see what's being sent
+      console.log("Creating event with data:", eventData);
+      
+      // Submit event data without eventNumber (it should be generated on the backend)
       const response = await eventsService.createEvent(eventData);
       
       if (!response.success) {
@@ -269,9 +358,17 @@ export default function NewEventPage() {
       
       notifications.success("تم إنشاء الحدث بنجاح");
       router.push("/dashboard/events");
-    } catch (error) {
+    } catch (error: any) {
       console.error("Error creating event:", error);
-      notifications.error("حدث خطأ أثناء إنشاء الحدث");
+      
+      // Display detailed error message if available
+      if (error.message) {
+        notifications.error(error.message);
+      } else if (error.response && error.response.data && error.response.data.message) {
+        notifications.error(error.response.data.message);
+      } else {
+        notifications.error("حدث خطأ أثناء إنشاء الحدث");
+      }
     } finally {
       setIsLoading(false);
     }
@@ -364,10 +461,9 @@ export default function NewEventPage() {
                 className="w-full px-3 py-2 text-sm border rounded-md bg-background"
                 required
               >
-                <option value="pending">معلق</option>
-                <option value="inProgress">قيد المتابعة</option>
-                <option value="completed">مكتمل</option>
-                <option value="verified">تم التحقق</option>
+              <option value="ongoing">قيد المتابعة</option>
+              <option value="finished">انتهى</option>
+              <option value="monitoring">تحت المراقبة</option>
               </select>
             </div>
           </div>

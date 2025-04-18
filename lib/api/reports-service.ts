@@ -89,7 +89,7 @@ class ReportsService {
   /**
    * Get all reports with optional filtering
    */
-  async getReports(filters?: ReportFilters): Promise<ApiResponse<{ reports: Report[]; total: number; page: number; totalPages: number }>> {
+  async getReports(filters?: ReportFilters): Promise<ApiResponse<any>> {
     // Convert filters to query string
     const queryParams = new URLSearchParams();
     
@@ -102,7 +102,9 @@ class ReportsService {
     }
     
     const queryString = queryParams.toString() ? `?${queryParams.toString()}` : '';
-    return apiClient.get<{ reports: Report[]; total: number; page: number; totalPages: number }>(`/reports${queryString}`);
+    // Use any type to handle various response formats
+    // The actual controller returns { success: true, count, total, pagination: {...}, data: reports }
+    return apiClient.get<any>(`/reports${queryString}`);
   }
   
   /**

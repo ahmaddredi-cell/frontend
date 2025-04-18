@@ -14,7 +14,7 @@ export interface Event {
   palestinianIntervention?: string;
   israeliResponse?: string;
   results?: string;
-  status: 'pending' | 'inProgress' | 'completed' | 'verified';
+  status: 'ongoing' | 'finished' | 'monitoring';
   severity: 'low' | 'medium' | 'high' | 'critical';
   reportId?: string;
   attachments?: Attachment[];
@@ -70,9 +70,10 @@ export interface CreateEventData {
   palestinianIntervention?: string;
   israeliResponse?: string;
   results?: string;
-  status?: 'pending' | 'inProgress' | 'completed' | 'verified';
+  status?: 'ongoing' | 'finished' | 'monitoring';
   severity: 'low' | 'medium' | 'high' | 'critical';
-  reportId?: string;
+  reportId: string; // Changed to required since it's needed for event creation
+  // eventNumber is generated on the backend so we don't include it here
 }
 
 export interface UpdateEventData extends Partial<CreateEventData> {
@@ -130,7 +131,7 @@ class EventsService {
   /**
    * Change event status
    */
-  async changeEventStatus(id: string, status: 'pending' | 'inProgress' | 'completed' | 'verified'): Promise<ApiResponse<Event>> {
+  async changeEventStatus(id: string, status: 'ongoing' | 'finished' | 'monitoring'): Promise<ApiResponse<Event>> {
     return apiClient.patch<Event>(`/events/${id}/status`, { status });
   }
   
@@ -166,7 +167,7 @@ class EventsService {
    */
   async uploadEventAttachment(eventId: string, file: File): Promise<ApiResponse<Attachment>> {
     const formData = new FormData();
-    formData.append('file', file);
+    formData.append('attachment', file); // Changed from 'file' to 'attachment' to match backend expectation
     
     return apiClient.uploadFile<Attachment>(`/events/${eventId}/attachments`, formData);
   }
